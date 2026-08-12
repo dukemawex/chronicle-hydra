@@ -13,6 +13,7 @@ import httpx
 HYDRA_URL = os.getenv("HYDRA_URL", "http://127.0.0.1:8443")
 HYDRA_TOKEN = os.getenv("HYDRA_TOKEN", "local-development-token-32-bytes")
 HYDRA_GRAPH = os.getenv("HYDRA_GRAPH", "default-tenant")
+HYDRA_COLLECTION = os.getenv("HYDRA_COLLECTION", "chronicle")
 HYDRA_CELL = os.getenv("HYDRA_CELL", "cell-0")
 
 
@@ -27,11 +28,28 @@ class HydraClient:
     token: str = HYDRA_TOKEN
     graph: str = HYDRA_GRAPH
     cell: str = HYDRA_CELL
+    collection: str = HYDRA_COLLECTION
+
+    @property
+    def hosted(self) -> bool:
+        return self.base_url.startswith("https://")
+
+    async def ingest_text(self, text: str, title: str = "chronicle-demo") -> dict:
+        if not self.hosted:
+            return await self.query(text)
+        import json
+        files = {"memories": (None, json.dumps([{"text": text, "infer": False, "title": title}]))}
+        data = {"type": "memory", "database": self.graph, "collection": self.collection, "upsert": "true"}
+        headers = {"Authorization": f"Bearer {self.token}", "API-Version": "2"}
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(f"{self.base_url.rstrip('/')}/context/ingest", headers=headers, data=data, files=files)
+            response.raise_for_status()
+            return response.json()
 
     async def query(self, cypher: str) -> dict:
         url = f"{self.base_url.rstrip('/')}/query" if self.base_url.startswith("https://") else f"{self.base_url.rstrip('/')}/v1/graphs/{self.graph}/query"
         headers = {"Authorization": f"Bearer {self.token}"}
-        payload = {"database": self.graph, "collection": self.cell, "query": cypher, "type": "all", "mode": "fast"} if self.base_url.startswith("https://") else {"cell_id": self.cell, "query": cypher}
+        payload = {"database": self.graph, "collection": self.collection, "query": cypher, "type": "all", "mode": "fast"} if self.base_url.startswith("https://") else {"cell_id": self.cell, "query": cypher}
         if self.base_url.startswith("https://"):
             headers["API-Version"] = "2"
         async with httpx.AsyncClient(timeout=30) as client:
@@ -40,6 +58,12 @@ class HydraClient:
             return response.json()
 
     async def setup_demo(self) -> None:
+        if self.hosted:
+            await self.ingest_text("""Session 1: Emmanuel prefers vim.
+Session 2: Emmanuel revises the preference and prefers neovim from now on.
+Historical value: vim. Current value: neovim.
+Evidence: session-1 and session-2.""", "chronicle-temporal-demo")
+            return
         await self.query("""
         CREATE
           (s1:Session {id:'s1', started_at:'2026-08-12T10:00:00Z'}),
