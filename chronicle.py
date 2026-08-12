@@ -12,7 +12,7 @@ import httpx
 
 HYDRA_URL = os.getenv("HYDRA_URL", "http://127.0.0.1:8443")
 HYDRA_TOKEN = os.getenv("HYDRA_TOKEN", "local-development-token-32-bytes")
-HYDRA_GRAPH = os.getenv("HYDRA_GRAPH", "default")
+HYDRA_GRAPH = os.getenv("HYDRA_GRAPH", "default-tenant")
 HYDRA_CELL = os.getenv("HYDRA_CELL", "cell-0")
 
 
@@ -29,10 +29,13 @@ class HydraClient:
     cell: str = HYDRA_CELL
 
     async def query(self, cypher: str) -> dict:
-        url = f"{self.base_url.rstrip('/')}/v1/graphs/{self.graph}/query"
-        headers = {"Authorization": f"Bearer {self.token}", "X-Graph-Namespace": "default"}
+        url = f"{self.base_url.rstrip('/')}/query" if self.base_url.startswith("https://") else f"{self.base_url.rstrip('/')}/v1/graphs/{self.graph}/query"
+        headers = {"Authorization": f"Bearer {self.token}"}
+        payload = {"database": self.graph, "collection": self.cell, "query": cypher, "type": "all", "mode": "fast"} if self.base_url.startswith("https://") else {"cell_id": self.cell, "query": cypher}
+        if self.base_url.startswith("https://"):
+            headers["API-Version"] = "2"
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(url, headers=headers, json={"cell_id": self.cell, "query": cypher})
+            response = await client.post(url, headers=headers, json=payload)
             response.raise_for_status()
             return response.json()
 
