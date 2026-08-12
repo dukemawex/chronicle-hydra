@@ -34,6 +34,27 @@ class HydraClient:
     def hosted(self) -> bool:
         return self.base_url.startswith("https://")
 
+    async def ingest_app_knowledge(self, items: list[dict]) -> dict:
+        if not self.hosted:
+            raise RuntimeError("app_knowledge ingestion requires hosted HydraDB v2")
+        import json
+        files = {"app_knowledge": (None, json.dumps(items))}
+        data = {"type": "knowledge", "database": self.graph, "collection": self.collection, "upsert": "true"}
+        headers = {"Authorization": f"Bearer {self.token}", "API-Version": "2"}
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(f"{self.base_url.rstrip('/')}/context/ingest", headers=headers, data=data, files=files)
+            response.raise_for_status()
+            return response.json()
+
+    async def ingest_session(self, session_id: str, messages: list[dict]) -> dict:
+        items = [{"id": f"{session_id}-{i}", "database": self.graph, "collection": self.collection,
+                  "title": f"Session {session_id}", "type": "conversation",
+                  "content": {"text": f"{m.get('role','user')}: {m.get('text','')}"},
+                  "metadata": {"session_id": session_id, "at": m.get("at")},
+                  "additional_metadata": {"source": "chronicle"}}
+                 for i, m in enumerate(messages)]
+        return await self.ingest_app_knowledge(items)
+
     async def ingest_text(self, text: str, title: str = "chronicle-demo") -> dict:
         if not self.hosted:
             return await self.query(text)
