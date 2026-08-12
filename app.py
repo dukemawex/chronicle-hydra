@@ -1,9 +1,15 @@
 from __future__ import annotations
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+from pathlib import Path
 from chronicle import HydraClient
 
 app = FastAPI(title="Chronicle", version="0.1.0")
+
+@app.get("/", response_class=HTMLResponse)
+async def home():
+    return Path("static/index.html").read_text()
 client = HydraClient()
 
 class Query(BaseModel):

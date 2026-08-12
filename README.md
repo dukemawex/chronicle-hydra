@@ -34,3 +34,12 @@ This project targets the open-source [HydraDB](https://github.com/hydra-db/hydra
 ## What Chronicle loses without HydraDB
 
 Chronicle is not a README integration. The live answer path calls HydraDB's `context/ingest` with structured session records, then calls HydraDB `/query` with `graph_context=true`. HydraDB extracts and returns the entity/relation paths used to answer. Without HydraDB, Chronicle loses the durable cross-session graph, revision links, provenance paths, temporal retrieval, and its ability to distinguish “superseded” from “current” instead of concatenating similar chunks.
+
+## Run the demo
+
+```bash
+pip install -e .
+uvicorn app:app --reload
+```
+
+Open `http://127.0.0.1:8000`. The UI calls the FastAPI graph-backed routes; the HydraDB key stays server-side.
