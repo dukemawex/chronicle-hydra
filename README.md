@@ -17,6 +17,16 @@ Day 1 scaffold. All participant-authored work starts on or after 2026-08-12, as 
 3. Chronicle answers the current preference and the historical preference separately.
 4. An unrelated question returns `NOT_IN_MEMORY` with no invented answer.
 
+## Built on the HydraDB open-source repo
+
+This repository pins the HydraDB OS source as `vendor/hydradb` via a Git submodule. The hosted API is the default demo runtime; the pinned source is the local/self-hosted runtime and the reference for the graph model and OpenCypher behavior.
+
+```bash
+git clone --recurse-submodules <this-repository-url>
+# or, after cloning:
+git submodule update --init --recursive
+```
+
 ## HydraDB
 
 This project targets the open-source [HydraDB](https://github.com/hydra-db/hydradb) graph database and its OpenCypher query interface.
