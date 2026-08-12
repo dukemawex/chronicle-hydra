@@ -70,7 +70,7 @@ class HydraClient:
     async def query(self, cypher: str) -> dict:
         url = f"{self.base_url.rstrip('/')}/query" if self.base_url.startswith("https://") else f"{self.base_url.rstrip('/')}/v1/graphs/{self.graph}/query"
         headers = {"Authorization": f"Bearer {self.token}"}
-        payload = {"database": self.graph, "collection": self.collection, "query": cypher, "type": "all", "mode": "fast"} if self.base_url.startswith("https://") else {"cell_id": self.cell, "query": cypher}
+        payload = {"database": self.graph, "collection": self.collection, "query": cypher, "type": "all", "mode": "thinking", "graph_context": True} if self.base_url.startswith("https://") else {"cell_id": self.cell, "query": cypher}
         if self.base_url.startswith("https://"):
             headers["API-Version"] = "2"
         async with httpx.AsyncClient(timeout=30) as client:
@@ -103,6 +103,11 @@ Evidence: session-1 and session-2.""", "chronicle-temporal-demo")
         """)
 
     async def current_assertion(self, subject: str, predicate: str) -> dict:
+        if self.hosted:
+            return await self.query(
+                f"What is the current value of {predicate} for {subject}? "
+                "Distinguish the current assertion from superseded assertions and include evidence paths."
+            )
         return await self.query(f"""
         MATCH (a:Assertion {{subject:{_q(subject)}, predicate:{_q(predicate)}, state:'current'}})
         OPTIONAL MATCH (a)-[:SUPPORTED_BY]->(m:Message)
@@ -111,6 +116,11 @@ Evidence: session-1 and session-2.""", "chronicle-temporal-demo")
         """)
 
     async def history(self, subject: str, predicate: str) -> dict:
+        if self.hosted:
+            return await self.query(
+                f"Show the chronological history of {predicate} for {subject}. "
+                "Include revisions, superseded values, validity times, and supporting messages."
+            )
         return await self.query(f"""
         MATCH (a:Assertion {{subject:{_q(subject)}, predicate:{_q(predicate)}}})
         OPTIONAL MATCH (a)-[:SUPPORTED_BY]->(m:Message)
@@ -119,9 +129,16 @@ Evidence: session-1 and session-2.""", "chronicle-temporal-demo")
         """)
 
     async def abstain(self, subject: str, predicate: str) -> dict:
+        if self.hosted:
+            result = await self.query(
+                f"Is there any recorded assertion for {predicate} about {subject}? "
+                "Return no result rather than inventing one if the memory graph has no evidence."
+            )
+            if not (result.get("data") or {}).get("chunks"):
+                return {"status": "NOT_IN_MEMORY", "evidence": []}
+            return result
         result = await self.query(f"""
         MATCH (a:Assertion {{subject:{_q(subject)}, predicate:{_q(predicate)}}})
         RETURN count(a) AS matches
         """)
-        # The app layer treats zero matches as a first-class answer.
         return {"status": "NOT_IN_MEMORY"} if not result.get("data") else result
